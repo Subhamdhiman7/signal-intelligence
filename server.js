@@ -1,7 +1,7 @@
 import http from "node:http";
 import { URL } from "node:url";
-import { mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { mkdirSync, existsSync, readFileSync } from "node:fs";
+import { join, dirname, extname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 const PORT = Number(process.env.PORT || 3001);
@@ -9,6 +9,22 @@ const REFRESH_MS = 60_000;
 const HISTORY_BUCKETS = 24;
 const BUCKET_MINUTES = 10;
 const DB_PATH = process.env.SIGNAL_DB || join(process.cwd(), "data", "signal.db");
+const DIST_DIR = join(process.cwd(), "dist");
+
+const MIME_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+};
 
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
@@ -495,6 +511,30 @@ const server = http.createServer(async (req, res) => {
       clearInterval(heartbeat);
       clients.delete(res);
     });
+    return;
+  }
+
+  // In production, serve the Vite build from the same Node process so the
+  // browser can use the same-origin /api endpoints.
+  if (existsSync(join(DIST_DIR, "index.html"))) {
+    const requestedPath = decodeURIComponent(url.pathname);
+    const relativePath = requestedPath === "/" ? "index.html" : requestedPath.slice(1);
+    const filePath = join(DIST_DIR, relativePath);
+    const safePath = filePath.startsWith(DIST_DIR) ? filePath : join(DIST_DIR, "index.html");
+
+    if (existsSync(safePath)) {
+      const extension = extname(safePath).toLowerCase();
+      res.writeHead(200, {
+        "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
+        "Cache-Control": extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
+      });
+      res.end(readFileSync(safePath));
+      return;
+    }
+
+    const indexPath = join(DIST_DIR, "index.html");
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" });
+    res.end(readFileSync(indexPath));
     return;
   }
 
