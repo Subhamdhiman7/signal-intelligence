@@ -1,4 +1,5 @@
 # SIGNAL — Real-Time Public-Signal Explorer
+https://signal-intelligence-sgwb.onrender.com/
 
 SIGNAL is a Part 2 frontend concept for an intelligence product that turns public information streams into transparent, time-based signal activity.
 
